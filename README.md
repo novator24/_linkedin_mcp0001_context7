@@ -896,6 +896,8 @@ See [Local and Remote MCPs for Perplexity](https://www.perplexity.ai/help-center
 
 Context7 MCP provides the following tools that LLMs can use:
 
+### Standard Tools
+
 - `resolve-library-id`: Resolves a general library name into a Context7-compatible library ID.
 
   - `libraryName` (required): The name of the library to search for
@@ -904,6 +906,29 @@ Context7 MCP provides the following tools that LLMs can use:
   - `context7CompatibleLibraryID` (required): Exact Context7-compatible library ID (e.g., `/mongodb/docs`, `/vercel/next.js`)
   - `topic` (optional): Focus the docs on a specific topic (e.g., "routing", "hooks")
   - `tokens` (optional, default 10000): Max number of tokens to return. Values less than the default value of 10000 are automatically increased to 10000.
+
+### VBA Support Tools
+
+- `resolve-vba-library`: Resolves a VBA library name to a Context7-compatible library ID for VBA documentation.
+  - `libraryName` (required): VBA library name to search for (e.g., 'Excel.Worksheet', 'Word.Document')
+  - `officeApp` (optional): Office application to filter results (Excel, Word, Access, PowerPoint, Outlook)
+  - `category` (optional): Category to filter results (Workbook, Worksheet, Range, Chart, PivotTable, Document, Table, Form, Query, Slide, Shape, Email, Calendar)
+  - `apiVersion` (optional): Specific API version to search for
+
+- `get-vba-docs`: Fetches up-to-date VBA documentation and code examples for a specific library.
+  - `vbaLibraryId` (required): VBA library ID (e.g., '/vba/excel-worksheet', '/vba/word-document')
+  - `topic` (optional): Specific VBA topic (e.g., 'ranges', 'charts', 'pivottables')
+  - `officeApp` (optional): Office application context
+  - `difficulty` (optional): Difficulty level for code examples (Beginner, Intermediate, Advanced)
+  - `tokens` (optional, default 10000): Maximum tokens to return (1000-50000)
+
+### Supported Office Applications
+
+- **Excel**: Worksheets, Ranges, Charts, PivotTables, Workbooks
+- **Word**: Documents, Tables, Text formatting
+- **Access**: Databases, Forms, Queries
+- **PowerPoint**: Slides, Shapes, Animations
+- **Outlook**: Email, Calendar, Contacts
 
 ## 🛟 Tips
 
@@ -943,6 +968,34 @@ Run the server:
 
 ```bash
 bun run dist/index.js
+```
+
+### Testing VBA Support
+
+Test the VBA functionality:
+
+```bash
+# Test VBA support
+bun run test:vba
+
+# Test with MCP Inspector
+bun run test:mcp
+```
+
+### VBA Examples
+
+```bash
+# Search for Excel VBA libraries
+resolve-vba-library --libraryName "Excel.Worksheet" --officeApp "Excel"
+
+# Get VBA documentation
+get-vba-docs --vbaLibraryId "/vba/excel-worksheet" --topic "ranges"
+
+# Search for Word VBA libraries
+resolve-vba-library --libraryName "Word.Document" --officeApp "Word" --category "Document"
+
+# Get filtered VBA documentation
+get-vba-docs --vbaLibraryId "/vba/word-document" --topic "formatting" --difficulty "Intermediate"
 ```
 
 ### CLI Arguments
