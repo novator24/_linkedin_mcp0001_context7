@@ -4,8 +4,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { searchLibraries, fetchLibraryDocumentation } from "./lib/api.js";
-import { formatSearchResults } from "./lib/utils.js";
+import { formatSearchResults, formatVBASearchResults, validateVBALibraryId } from "./lib/utils.js";
 import { SearchResponse } from "./lib/types.js";
+import { searchVBALibraries, fetchVBADocumentation, validateVBAParameters } from "./lib/vba-api.js";
 import { createServer } from "http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -211,6 +212,184 @@ ${resultsText}`,
           },
         ],
       };
+    }
+  );
+
+  // Register VBA tools
+  server.tool(
+    "resolve-vba-library",
+    "Resolves a VBA library name to a Context7-compatible library ID for VBA documentation.",
+    {
+      libraryName: z
+        .string()
+        .describe("VBA library name to search for (e.g., 'Excel.Worksheet', 'Word.Document')")
+        .min(1)
+        .max(100),
+      officeApp: z
+        .enum(["Excel", "Word", "Access", "PowerPoint", "Outlook"])
+        .optional()
+        .describe("Office application to filter results"),
+      category: z
+        .enum(["Workbook", "Worksheet", "Range", "Chart", "PivotTable", "Document", "Table", "Form", "Query", "Slide", "Shape", "Email", "Calendar"])
+        .optional()
+        .describe("Category to filter results"),
+      apiVersion: z
+        .string()
+        .optional()
+        .describe("Specific API version to search for"),
+    },
+    async ({ libraryName, officeApp, category, apiVersion }) => {
+      try {
+        // Логирование запроса
+        console.log(`VBA Library Search: ${libraryName}`, { officeApp, category, apiVersion });
+
+        // Валидация параметров
+        if (!validateVBAParameters({ libraryName, officeApp, category })) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Invalid VBA search parameters. Please check your input and try again.",
+              },
+            ],
+          };
+        }
+
+        // Поиск библиотек
+        const searchResponse = await searchVBALibraries(libraryName, {
+          officeApp,
+          category,
+          apiVersion,
+        });
+
+        // Обработка ошибок
+        if (searchResponse.error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error searching VBA libraries: ${searchResponse.error}`,
+              },
+            ],
+          };
+        }
+
+        // Форматирование результатов
+        const resultsText = formatVBASearchResults(searchResponse, {
+          officeApp,
+          category,
+          showExamples: true,
+          showTrustScore: true,
+        });
+
+        // Возврат результата
+        return {
+          content: [
+            {
+              type: "text",
+              text: resultsText,
+            },
+          ],
+        };
+      } catch (error) {
+        console.error("VBA library search error:", error);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to search VBA libraries: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get-vba-docs",
+    "Fetches up-to-date VBA documentation and code examples for a specific library.",
+    {
+      vbaLibraryId: z
+        .string()
+        .describe("VBA library ID (e.g., '/vba/excel-worksheet', '/vba/word-document')")
+        .regex(/^\/vba\/[a-z0-9-]+$/, "Invalid VBA library ID format"),
+      topic: z
+        .string()
+        .optional()
+        .describe("Specific VBA topic (e.g., 'ranges', 'charts', 'pivottables')")
+        .max(50),
+      officeApp: z
+        .enum(["Excel", "Word", "Access", "PowerPoint", "Outlook"])
+        .optional()
+        .describe("Office application context"),
+      difficulty: z
+        .enum(["Beginner", "Intermediate", "Advanced"])
+        .optional()
+        .describe("Difficulty level for code examples"),
+      tokens: z
+        .number()
+        .optional()
+        .describe("Maximum tokens to return")
+        .min(1000)
+        .max(50000)
+        .default(10000),
+    },
+    async ({ vbaLibraryId, topic, officeApp, difficulty, tokens }) => {
+      try {
+        // Валидация library ID
+        if (!validateVBALibraryId(vbaLibraryId as string)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Invalid VBA library ID format. Expected format: /vba/library-name",
+              },
+            ],
+          };
+        }
+
+        // Логирование запроса
+        console.log(`VBA Documentation Request: ${vbaLibraryId}`, { topic, officeApp, difficulty, tokens });
+
+        // Получение документации
+        const docs = await fetchVBADocumentation(vbaLibraryId as string, {
+          topic: topic as string | undefined,
+          officeApp: officeApp as any,
+          difficulty: difficulty as any,
+          tokens: tokens as number | undefined,
+        });
+
+        if (!docs) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "VBA documentation not found. Please check the library ID and try again.",
+              },
+            ],
+          };
+        }
+
+        // Возврат результата
+        return {
+          content: [
+            {
+              type: "text",
+              text: docs,
+            },
+          ],
+        };
+      } catch (error) {
+        console.error("VBA documentation fetch error:", error);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to fetch VBA documentation: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
     }
   );
 
